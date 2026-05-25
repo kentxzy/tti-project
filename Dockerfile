@@ -8,6 +8,20 @@ RUN apt-get update && apt-get install -y \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Enable Apache rewrite module
+RUN a2enmod rewrite
+
+# Set Apache to serve from /public and listen on port 10000
+RUN echo '<VirtualHost *:10000>\n\
+    DocumentRoot /var/www/html/public\n\
+    <Directory /var/www/html/public>\n\
+        AllowOverride All\n\
+        Require all granted\n\
+        Options Indexes FollowSymLinks\n\
+    </Directory>\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's/Listen 80/Listen 10000/' /etc/apache2/ports.conf
+
 # Set working directory
 WORKDIR /var/www/html
 
@@ -22,11 +36,6 @@ RUN npm install && npm run build
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-# Apache configuration
-RUN a2enmod rewrite
-RUN sed -i 's/80/10000/g' /etc/apache2/ports.conf
-COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 
 # Start script
 COPY docker/start.sh /start.sh
