@@ -2,8 +2,12 @@ FROM php:8.2-apache
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    git curl zip unzip libpng-dev libonig-dev libxml2-dev libzip-dev nodejs npm \
+    git curl zip unzip libpng-dev libonig-dev libxml2-dev libzip-dev \
     && docker-php-ext-install pdo pdo_mysql mbstring zip exif pcntl bcmath gd
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -17,7 +21,6 @@ RUN echo '<VirtualHost *:10000>\n\
     <Directory /var/www/html/public>\n\
         AllowOverride All\n\
         Require all granted\n\
-        Options Indexes FollowSymLinks\n\
     </Directory>\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf \
     && sed -i 's/Listen 80/Listen 10000/' /etc/apache2/ports.conf
@@ -33,9 +36,6 @@ RUN composer install --no-dev --optimize-autoloader
 
 # Install Node dependencies and build assets
 RUN npm install && npm run build
-
-# Install Node dependencies and build assets
-RUN npm install && npm run build && ls -la public/build
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
