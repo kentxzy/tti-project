@@ -24,9 +24,13 @@ RUN npm install && npm run build
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Apache configuration
+RUN a2enmod rewrite
+RUN sed -i 's/80/10000/g' /etc/apache2/ports.conf
+COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
+
+# Start script
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Expose port
 EXPOSE 10000
 CMD ["/start.sh"]
