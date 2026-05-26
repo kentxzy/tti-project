@@ -1,54 +1,40 @@
-FROM php:8.4-apache
+FROM php:8.2-apache
 
+# Install dependencies
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    curl \
-    libpq-dev \
-    libzip-dev \
-    libonig-dev \
-    libxml2-dev \
-    libpng-dev \
-    zip \
-    && docker-php-ext-install pdo pdo_mysql pdo_pgsql zip mbstring xml \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    git curl zip unzip libpng-dev libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-install pdo pdo_mysql mbstring zip exif pcntl bcmath gd
 
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Enable Apache rewrite module
 RUN a2enmod rewrite
 
-RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf \
-    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:10000>/g' /etc/apache2/sites-available/000-default.conf
+# Set Apache to serve from /public and listen on port 10000
+RUN echo '<VirtualHost *:10000>\n\
+    DocumentRoot /var/www/html/public\n\
+    <Directory /var/www/html/public>\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's/Listen 80/Listen 10000/' /etc/apache2/ports.conf
 
-RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
-    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/apache2.conf
-
-RUN printf '<Directory /var/www/html/public>\nAllowOverride All\nRequire all granted\n</Directory>\n' > /etc/apache2/conf-available/laravel.conf \
-    && a2enconf laravel
-
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
-
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
+# Set working directory
 WORKDIR /var/www/html
 
+# Copy project files (includes pre-built public/build)
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# Install PHP dependencies only
+RUN composer install --no-dev --optimize-autoloader
 
-RUN npm install && npm run build
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-RUN php artisan config:clear \
-    && php artisan route:clear \
-    && php artisan view:clear
-
-RUN php artisan storage:link || true
-
-RUN mkdir -p storage/framework/cache storage/framework/sessions \
-    storage/framework/views bootstrap/cache public/uploads \
-    && chown -R www-data:www-data storage bootstrap/cache public/uploads \
-    && chmod -R 775 storage bootstrap/cache public/uploads
-
+# Start script
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
